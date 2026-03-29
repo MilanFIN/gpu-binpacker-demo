@@ -1,0 +1,5 @@
+rootProject.name = 'binpacker-demo'
+
+include ':localLib'
+//Todo: set to path for local library
+project(':localLib').projectDir = file('../javaimpl')

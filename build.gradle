@@ -1,0 +1,28 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+javafx {
+    version = "17"
+    modules = [ 'javafx.controls', 'javafx.graphics' ]
+}
+
+dependencies {
+    // To use a local version, uncomment this, comment the other implementation
+    // and set the path in settings.gralde
+    //implementation project(':localLib')
+    
+    // To fetch the library jitpack instead, uncomment the line below and comment the previous line out:
+    implementation 'com.github.MilanFIN:gpu-binpacker:main-SNAPSHOT'
+}
+
+application {
+    mainClass = 'com.binpacker.app.Main'
+}
