@@ -9,9 +9,11 @@ import com.binpacker.lib.solver.cpusolvers.BestFit3D;
 import com.binpacker.lib.solver.cpusolvers.BestFitEMS;
 import com.binpacker.lib.solver.cpusolvers.FirstFit2D;
 import com.binpacker.lib.solver.cpusolvers.FirstFit3D;
+import com.binpacker.lib.solver.cpusolvers.FirstFitEMS;
 import com.binpacker.lib.solver.cpusolvers.SolverInterface;
 import com.binpacker.lib.solver.parallelsolvers.BestFitEMSReference;
 import com.binpacker.lib.solver.parallelsolvers.BestFitReference;
+import com.binpacker.lib.solver.parallelsolvers.FirstFitEMSReference;
 import com.binpacker.lib.solver.parallelsolvers.FirstFitReference;
 import com.binpacker.lib.solver.parallelsolvers.opencl.OpenCLSolver;
 import com.binpacker.lib.solver.parallelsolvers.cuda.CudaSolver;
@@ -115,6 +117,7 @@ public class GuiApp extends Application {
 	private int generations = 200;
 	private int population = 30;
 	private int eliteCount = 3;
+	private int threads = 0;
 	private boolean growingBin = false;
 
 	private String axis = "x";
@@ -268,11 +271,13 @@ public class GuiApp extends Application {
 					return "3D best fit bsp";
 				} else if (solver instanceof BestFitEMS) {
 					return "Best Fit EMS";
+				} else if (solver instanceof FirstFitEMS) {
+					return "First Fit EMS";
 				} else if (solver instanceof OpenCLSolver) {
 					OpenCLSolver gpuSolver = (OpenCLSolver) solver;
 					return gpuSolver.getDisplayName();
 				} else if (solver instanceof CudaSolver) {
-					return "BestFit EMS (CUDA)";
+					return "BestFit EMS (CUDA, dummy)";
 				}
 				return solver.getClass().getSimpleName(); // Fallback
 			}
@@ -284,12 +289,15 @@ public class GuiApp extends Application {
 			}
 		});
 		this.solverComboBox.getItems().addAll(new FirstFit3D(), new FirstFit2D(), new BestFit3D(), new BestFitEMS(),
+				new FirstFitEMS(),
 				new OpenCLSolver("firstfit_complete.cl.template", "guillotine_first_fit", "FirstFit GPU (Parallel)",
 						new FirstFitReference()),
 				new OpenCLSolver("bestfit_complete.cl.template", "guillotine_best_fit", "BestFit GPU (Parallel)",
 						new BestFitReference()),
 				new OpenCLSolver("bestfit_ems.cl.template", "best_fit_ems", "BestFit EMS GPU (Parallel)",
 						new BestFitEMSReference()),
+				new OpenCLSolver("firstfit_ems.cl.template", "first_fit_ems", "FirstFit EMS GPU (Parallel)",
+						new FirstFitEMSReference()),
 				new CudaSolver());
 		this.solverComboBox.setValue(this.solverComboBox.getItems().get(0)); // Set default to the first item
 
@@ -337,10 +345,24 @@ public class GuiApp extends Application {
 			}
 		});
 
+		Label threadsLabel = new Label("CPU Cores (0 = max):");
+		javafx.scene.control.TextField threadsField = new javafx.scene.control.TextField(String.valueOf(this.threads));
+		threadsField.textProperty().addListener((observable, oldValue, newValue) -> {
+			if (!newValue.matches("\\d*")) {
+				threadsField.setText(oldValue);
+			} else {
+				try {
+					GuiApp.this.threads = Integer.parseInt(newValue);
+				} catch (NumberFormatException ex) {
+					GuiApp.this.threads = 0;
+				}
+			}
+		});
+
 		controls.getChildren().add(new javafx.scene.control.Separator());
 		controls.getChildren().addAll(solverOptions, generationsLabel, generationsField, populationLabel,
 				populationField,
-				eliteCountLabel, eliteCountField);
+				eliteCountLabel, eliteCountField, threadsLabel, threadsField);
 
 		statusLabel = new Label("Ready");
 		controls.getChildren().add(this.solverComboBox);
@@ -407,7 +429,7 @@ public class GuiApp extends Application {
 
 		root.getChildren().add(controls);
 
-		Scene scene = new Scene(root, 400, 700); // Smaller size for controls only
+		Scene scene = new Scene(root, 400, 800); // Smaller size for controls only
 		primaryStage.setTitle("Bin packing solver - Controls");
 		primaryStage.setScene(scene);
 		primaryStage.show();
@@ -615,13 +637,13 @@ public class GuiApp extends Application {
 			parallelSolver.init(properties);
 			gpuOptimizer.initialize(parallelSolver, boxes, bin, growingBin, axis, rotationAxes, this.population,
 					this.eliteCount,
-					true);
+					0); // Threads typically don't apply to GPU the same way, but 0 is safe
 			optimizer = gpuOptimizer;
 		} else if (selectedSolver instanceof SolverInterface) {
 			CPUOptimizer cpuOptimizer = new CPUOptimizer();
 			SolverInterface solver = (SolverInterface) selectedSolver;
 
-			boolean threaded = true;
+			int threads = this.threads; // Use configurable threads
 
 			Class<? extends SolverInterface> solverClass = solver.getClass();
 			java.util.function.Supplier<SolverInterface> factory = () -> {
@@ -641,7 +663,7 @@ public class GuiApp extends Application {
 			};
 
 			cpuOptimizer.initialize(factory, boxes, bin, growingBin, axis, rotationAxes, this.population,
-					this.eliteCount, threaded);
+					this.eliteCount, threads);
 			optimizer = cpuOptimizer;
 		} else {
 			statusLabel.setText("Unknown solver type");
